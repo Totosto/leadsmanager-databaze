@@ -1,0 +1,13 @@
+companise.db je hlavní databáze kde je pár webů definovaných jako špatné pro vědší
+pořádek jsem je odfiltroval do bad_design_companies.db. 
+
+
+
+Vytvořil jsem gui kde se dá procházet databáze. momentálně je to napojeno na 
+bad_design_companies.db. Aby jsi se mohl podívat jaké weby jsem definoval jako 
+špatné. Zároveň skrze gui budeme kontrolovat i výstup té automatizace. Já vyskoušel
+udělat filtraci na zakladě absence https což dost možná bude dobrý začátek. nevým zaklada
+to funguje. 
+
+výstup chci do databáze zvlášť radši neupravuj companies.db ve výsledné databázy 
+muzí zustat zachovány všechny kolonky krome verified 
