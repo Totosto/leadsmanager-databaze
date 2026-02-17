@@ -1,0 +1,34 @@
+
+=== DATABÁZE: companies.db ===
+
+Tabulka: categories
+  - id (INTEGER) [PK]
+  - name (TEXT) 
+
+Tabulka: companies
+  - id (INTEGER) [PK]
+  - name (TEXT) 
+  - kraj (TEXT) ;
+  - web (TEXT) 
+  - email (TEXT) 
+  - phone (TEXT) 
+  - instagram (TEXT) 
+  - facebook (TEXT) 
+  - funguje (TEXT) [1 = funguje, 0 = nefunguje, python_gui = check in python]  #python gui jsou weby u kterých je definovaná nekompatibilita s režimem i frame režimem v manuálním filteru. Dá se s nimi počítat jako s funkčními a na 95% jsou moderní
+  - web_verified (TEXT) [unverified, kvalitní grafika, nekvalitní grafika, nefunguje, neodpovida-obor] 
+  - status (TEXT) 
+  - assigned_user (TEXT) 
+  - user_notes (TEXT) 
+  - timestamp (DATETIME) 
+
+Tabulka: company_categories
+  - company_id (INTEGER) [PK]
+  - category_id (INTEGER) [PK]
+
+=== DATABÁZE: users.db ===
+
+Tabulka: users
+  - id (INTEGER) [PK]
+  - username (TEXT) 
+  - role (TEXT) 
+  - hash (TEXT) 

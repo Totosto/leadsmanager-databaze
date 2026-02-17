@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prohlížeč databází</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: sans-serif;
+            background-color: #f0f0f0;
+        }
+
+        #controls {
+            height: 50px;
+            background: #333;
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        select {
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #555;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #777;
+        }
+
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #777;
+            text-align: center;
+        }
+
+        #url-display {
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #ddd;
+            font-size: 14px;
+        }
+
+        #iframe-container {
+            width: 100%;
+            height: calc(100% - 50px);
+            background: white;
+            position: relative;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            color: #666;
+            display: none;
+        }
+
+        /* Error overlay for blocked iframes or failed loads */
+        #error-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .open-btn {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="controls">
+        <select id="db-select">
+            <option>Načítání...</option>
+        </select>
+        <button id="refresh-btn" title="Aktualizovat seznam (znovu načíst)">&#x21bb;</button>
+
+        <div style="width: 1px; height: 30px; background: #555;"></div>
+
+        <button id="prev-btn" title="Předchozí (Šipka vlevo)">&#8592;</button>
+        <span>Index:</span>
+        <input type="number" id="index-input" value="1" min="1">
+        <span>/ <span id="total-count">0</span></span>
+        <button id="next-btn" title="Další (Šipka vpravo)">&#8594;</button>
+
+        <div id="url-display"></div>
+        <button id="delete-btn" style="background-color: #d9534f;" title="Smazat z databáze">Smazat</button>
+        <a id="external-link" href="#" target="_blank"
+            style="color: #aaf; text-decoration: none; font-size: 12px;">Externí</a>
+    </div>
+
+    <div id="iframe-container">
+        <div id="loading">Načítání...</div>
+        <div id="error-overlay">
+            <h3>Web nelze zobrazit v rámu (iframe)</h3>
+            <p>Tento web pravděpodobně blokuje zobrazení v jiné stránce.</p>
+            <a id="error-link" href="#" target="_blank" class="open-btn">Otevřít v novém okně</a>
+        </div>
+        <iframe id="main-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    </div>
+
+    <script>
+        let companies = [];
+        let currentIndex = 0;
+        let currentDb = '';
+
+        const frame = document.getElementById('main-frame');
+        const indexInput = document.getElementById('index-input');
+        const totalCountSpan = document.getElementById('total-count');
+        const urlDisplay = document.getElementById('url-display');
+        const errorOverlay = document.getElementById('error-overlay');
+        const errorLink = document.getElementById('error-link');
+        const externalLink = document.getElementById('external-link');
+        const loading = document.getElementById('loading');
+        const dbSelect = document.getElementById('db-select');
+
+        // 1. Fetch available databases
+        fetch('/api/databases')
+            .then(res => res.json())
+            .then(dbs => {
+                dbSelect.innerHTML = '';
+                dbs.forEach(db => {
+                    const opt = document.createElement('option');
+                    opt.value = db;
+                    opt.textContent = db;
+                    dbSelect.appendChild(opt);
+                });
+                // Auto Select priority: bad_design_companies.db > companies.db > http_companies.db
+                if (dbs.includes('bad_design_companies.db')) {
+                    dbSelect.value = 'bad_design_companies.db';
+                } else if (dbs.includes('companies.db')) {
+                    dbSelect.value = 'companies.db';
+                } else if (dbs.includes('http_companies.db')) {
+                    dbSelect.value = 'http_companies.db';
+                }
+                loadData();
+            });
+
+        dbSelect.addEventListener('change', loadData);
+        document.getElementById('refresh-btn').addEventListener('click', loadData);
+
+        function loadData() {
+            const db = dbSelect.value;
+            currentDb = db;
+            if (!db) return;
+
+            urlDisplay.textContent = "Načítání dat...";
+
+            fetch('/api/companies?db=' + db)
+                .then(response => response.json())
+                .then(data => {
+                    // Determine format (new format returns {companies: [], current_db: ...})
+                    // Old format returned just []
+                    if (data.companies) {
+                        companies = data.companies;
+                    } else if (Array.isArray(data)) {
+                        companies = data; // fallback
+                    } else {
+                        companies = [];
+                    }
+
+                    if (companies.length > 0) {
+                        totalCountSpan.textContent = companies.length;
+                        indexInput.max = companies.length;
+                        currentIndex = 0; // Reset to start
+                        loadCompany(0);
+                    } else {
+                        totalCountSpan.textContent = 0;
+                        urlDisplay.textContent = "Žádné záznamy v databázi " + db;
+                        frame.src = 'about:blank';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    urlDisplay.textContent = "Chyba při načítání dat.";
+                });
+        }
+
+        function loadCompany(index) {
+            if (index < 0 || index >= companies.length) return;
+
+            currentIndex = index;
+            indexInput.value = currentIndex + 1;
+
+            const company = companies[currentIndex];
+            let url = company.web;
+
+            // Ensure protocol
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'http://' + url;
+            }
+
+            urlDisplay.textContent = `${company.name || 'Bez názvu'} (${url})`;
+            externalLink.href = url;
+            errorLink.href = url;
+
+            // Hide error, show loading
+            errorOverlay.style.display = 'none';
+            loading.style.display = 'block';
+
+            // Attempt to load
+            frame.src = url;
+
+            frame.onload = () => {
+                loading.style.display = 'none';
+            };
+        }
+
+        // Navigation Logic
+        function goNext() {
+            if (currentIndex < companies.length - 1) {
+                loadCompany(currentIndex + 1);
+            }
+        }
+
+        function goPrev() {
+            if (currentIndex > 0) {
+                loadCompany(currentIndex - 1);
+            }
+        }
+
+        // Jump to index
+        indexInput.addEventListener('change', () => {
+            let val = parseInt(indexInput.value);
+            if (isNaN(val)) val = 1;
+            if (val < 1) val = 1;
+            if (val > companies.length) val = companies.length;
+            loadCompany(val - 1);
+        });
+
+        // Buttons
+        document.getElementById('next-btn').addEventListener('click', goNext);
+        document.getElementById('prev-btn').addEventListener('click', goPrev);
+        document.getElementById('delete-btn').addEventListener('click', deleteCompany);
+
+        function deleteCompany() {
+            if (!companies[currentIndex]) return;
+            const companyId = companies[currentIndex].id;
+
+            if (!confirm('Opravdu chcete smazat tuto firmu z databáze ' + currentDb + '?')) return;
+
+            fetch('/api/companies/' + companyId + '?db=' + currentDb, {
+                method: 'DELETE'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove from array
+                        companies.splice(currentIndex, 1);
+
+                        // Update total count
+                        totalCountSpan.textContent = companies.length;
+                        indexInput.max = companies.length;
+
+                        // Adjust index if needed
+                        if (currentIndex >= companies.length) {
+                            currentIndex = companies.length - 1;
+                        }
+
+                        if (companies.length > 0) {
+                            loadCompany(currentIndex);
+                        } else {
+                            frame.src = 'about:blank';
+                            urlDisplay.textContent = "Žádné další záznamy.";
+                            indexInput.value = 0;
+                        }
+                    } else {
+                        alert('Chyba při mazání: ' + (data.error || 'Neznámá chyba'));
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Chyba při komunikaci se serverem.');
+                });
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement === indexInput) {
+                if (e.key === 'Enter') indexInput.blur();
+                return;
+            }
+
+            if (e.key === 'ArrowRight') {
+                goNext();
+            } else if (e.key === 'ArrowLeft') {
+                goPrev();
+            }
+        });
+
+    </script>
+
+</body>
+
+</html>
