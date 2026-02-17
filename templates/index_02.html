@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prohlížeč databází</title>
+
+  <style>
+    body, html { margin:0; padding:0; height:100%; overflow:hidden; font-family:sans-serif; background:#f0f0f0; }
+
+    #layout { height: 100vh; display: flex; flex-direction: column; }
+
+    #controls {
+      background:#333; color:white;
+      display:flex; flex-direction:column;
+      padding:10px 20px; gap:8px;
+      box-shadow:0 2px 5px rgba(0,0,0,0.2);
+      box-sizing:border-box;
+
+      height: 210px;
+      min-height: 150px;
+      max-height: 75vh;
+      overflow: hidden;
+    }
+
+    #splitter { height: 6px; background: #222; cursor: row-resize; flex: 0 0 auto; }
+    #splitter:hover { background:#111; }
+
+    #iframe-container { flex: 1 1 auto; background:white; position:relative; min-height: 120px; }
+    iframe { width:100%; height:100%; border:none; }
+
+    #loading {
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-50%);
+      font-size:20px; color:#666;
+      display:none;
+      background: rgba(255,255,255,0.8);
+      padding: 10px 16px;
+      border-radius: 8px;
+    }
+
+    .row { display:flex; align-items:center; gap:12px; width:100%; flex-wrap: nowrap; }
+
+    select { padding:5px; border-radius:4px; }
+    button { padding:8px 14px; background:#555; color:white; border:none; cursor:pointer; border-radius:4px; font-size:14px; }
+    button:hover { background:#777; }
+
+    .btn-blue { background:#1f6feb; }
+    .btn-blue:hover { background:#2b7fff; }
+
+    .btn-mini { padding:6px 10px; font-size:12px; }
+
+    input[type="number"] { width:70px; padding:5px; border-radius:4px; border:1px solid #777; text-align:center; }
+
+    input[type="text"] {
+      padding:6px 8px; border-radius:6px;
+      border:1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color:#fff; outline:none;
+      min-width: 160px;
+    }
+
+    .mini-label { font-size:12px; color:#ddd; white-space:nowrap; }
+
+    #url-display { flex-grow:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#ddd; font-size:14px; }
+
+    #badge {
+      display:inline-block; padding:2px 8px;
+      border-radius:999px; background:#555;
+      color:#fff; font-size:12px; white-space:nowrap;
+    }
+
+    #popis-display {
+      flex-grow:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      padding:6px 10px; border-radius:6px;
+      color:#ddd;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    #flags-box {
+      display:flex; flex-wrap:wrap; gap:10px;
+      max-height: 52px; overflow:auto;
+      padding:6px 8px;
+      background: rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:6px;
+    }
+    .flag-item { display:flex; align-items:center; gap:6px; font-size:12px; color:#ddd; white-space:nowrap; }
+
+    /* NEW: Company header for sales */
+    #company-header {
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      overflow: hidden;
+    }
+
+    #company-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #company-contacts {
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: #ddd;
+      font-size: 13px;
+    }
+
+    .chip {
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.10);
+      max-width: 100%;
+    }
+
+    .chip a { color: #aaf; text-decoration:none; }
+    .chip span { white-space: nowrap; overflow:hidden; text-overflow: ellipsis; max-width: 320px; }
+
+    #status-editor {
+      display:flex; align-items:center; gap:10px;
+      padding:6px 8px;
+      background: rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:6px;
+      overflow:hidden;
+    }
+
+    #status-save-msg {
+      font-size: 12px; color: #b6f3c0;
+      opacity: 0; transition: opacity 0.25s ease;
+      white-space: nowrap;
+    }
+    #status-save-msg.err { color: #ffb4b4; }
+  </style>
+</head>
+
+<body>
+<div id="layout">
+
+  <div id="controls">
+
+    <!-- Row 0: Sales header (name + contacts) -->
+    <div id="company-header">
+      <div id="company-name">—</div>
+      <div id="company-contacts">
+        <div class="chip"><strong>📞</strong> <span id="c-phone">—</span>
+          <button class="btn-mini" id="copy-phone">Kopírovat</button>
+        </div>
+        <div class="chip"><strong>✉️</strong> <a id="c-email" href="#"><span>—</span></a></div>
+        <div class="chip"><strong>🌐</strong> <a id="c-web" href="#" target="_blank"><span>—</span></a></div>
+        <div class="chip"><strong>📷</strong> <a id="c-ig" href="#" target="_blank"><span>instagram</span></a></div>
+        <div class="chip"><strong>📘</strong> <a id="c-fb" href="#" target="_blank"><span>facebook</span></a></div>
+      </div>
+    </div>
+
+    <!-- Row 1 -->
+    <div class="row">
+      <select id="db-select"></select>
+
+      <select id="mode-select">
+        <option value="all">Vše</option>
+        <option value="bad">Nekvalitní grafika</option>
+        <option value="dead">Nefunguje</option>
+        <option value="unverified">Neoznačené</option>
+      </select>
+
+      <span class="mini-label">Min. flagů:</span>
+      <input type="number" id="min-flags-input" value="0" min="0" max="50">
+
+      <button id="refresh-btn" title="Aktualizovat">↻</button>
+
+      <div style="width:1px;height:30px;background:#555;"></div>
+
+      <button id="prev-btn" title="Předchozí">←</button>
+      <span>Index:</span>
+      <input type="number" id="index-input" value="1" min="1">
+      <span>/ <span id="total-count">0</span></span>
+      <button id="next-btn" title="Další">→</button>
+
+      <div id="url-display"></div>
+
+      <a id="external-link" href="#" target="_blank" style="color:#aaf;text-decoration:none;font-size:12px;">Externí</a>
+
+      <button class="btn-blue" id="export-btn" title="Exportuje DB podle filtrů">Export_filtered_database</button>
+    </div>
+
+    <!-- Row 2 -->
+    <div class="row">
+      <span id="badge">web_verified: —</span>
+      <div id="popis-display">popis: —</div>
+    </div>
+
+    <!-- Row 3 -->
+    <div class="row">
+      <span class="mini-label">Musí obsahovat flagy:</span>
+      <div id="flags-box"></div>
+    </div>
+
+    <!-- Row 4 -->
+    <div class="row" style="gap:14px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="mini-label">Filtr status:</span>
+        <select id="status-filter-mode">
+          <option value="all">Vše</option>
+          <option value="empty">Jen prázdné</option>
+          <option value="contains">Obsahuje...</option>
+        </select>
+        <input type="text" id="status-filter-text" placeholder="např. zavoláno" style="display:none;">
+      </div>
+
+      <div id="status-editor" style="flex:1;">
+        <span class="mini-label">Doplnit status:</span>
+        <input type="text" id="status-edit-input" placeholder="např. zavoláno / poslat email / nezvedá..." style="flex:1;min-width:220px;">
+        <button id="status-save-btn" title="Uložit status">Uložit</button>
+        <span id="status-save-msg">Uloženo</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="splitter" title="Táhni pro změnu velikosti panelu"></div>
+
+  <div id="iframe-container">
+    <div id="loading">Načítání...</div>
+    <iframe id="main-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  </div>
+</div>
+
+<script>
+  let companies = [];
+  let currentIndex = 0;
+
+  let currentDb = '';
+  let currentMode = 'all';
+  let minFlags = 0;
+  let requiredFlags = new Set();
+
+  let statusFilterMode = 'all';
+  let statusFilterText = '';
+
+  const frame = document.getElementById('main-frame');
+  const loading = document.getElementById('loading');
+
+  const dbSelect = document.getElementById('db-select');
+  const modeSelect = document.getElementById('mode-select');
+  const minFlagsInput = document.getElementById('min-flags-input');
+  const flagsBox = document.getElementById('flags-box');
+
+  const indexInput = document.getElementById('index-input');
+  const totalCountSpan = document.getElementById('total-count');
+  const urlDisplay = document.getElementById('url-display');
+
+  const externalLink = document.getElementById('external-link');
+  const badge = document.getElementById('badge');
+  const popisDisplay = document.getElementById('popis-display');
+
+  const statusFilterModeSel = document.getElementById('status-filter-mode');
+  const statusFilterTextInp = document.getElementById('status-filter-text');
+
+  const statusEditInput = document.getElementById('status-edit-input');
+  const statusSaveBtn = document.getElementById('status-save-btn');
+  const statusSaveMsg = document.getElementById('status-save-msg');
+
+  const exportBtn = document.getElementById('export-btn');
+
+  // Sales header elements
+  const companyNameEl = document.getElementById('company-name');
+  const phoneEl = document.getElementById('c-phone');
+  const copyPhoneBtn = document.getElementById('copy-phone');
+  const emailA = document.getElementById('c-email');
+  const webA = document.getElementById('c-web');
+  const igA = document.getElementById('c-ig');
+  const fbA = document.getElementById('c-fb');
+
+  function setBadgeStyle(text) {
+    const t = (text || "").toLowerCase();
+    if (t.includes("nefunguje")) badge.style.background = "#b33";
+    else if (t.includes("nekvalitní")) badge.style.background = "#b86a00";
+    else if (t.includes("kvalitní")) badge.style.background = "#2d8a3a";
+    else badge.style.background = "#555";
+  }
+
+  function getFlagsParam() {
+    return Array.from(requiredFlags).join(",");
+  }
+
+  function showSaveMsg(ok, msg) {
+    statusSaveMsg.classList.remove('err');
+    if (!ok) statusSaveMsg.classList.add('err');
+    statusSaveMsg.textContent = msg;
+    statusSaveMsg.style.opacity = '1';
+    setTimeout(() => statusSaveMsg.style.opacity = '0', 1200);
+  }
+
+  function currentCompany() {
+    return companies[currentIndex] || null;
+  }
+
+  function safeText(x) {
+    return (x === null || x === undefined || String(x).trim() === "") ? "—" : String(x).trim();
+  }
+
+  function setLinkOrDisable(aEl, url, labelIfEmpty) {
+    const span = aEl.querySelector("span");
+    if (url && String(url).trim() !== "") {
+      aEl.style.opacity = "1";
+      aEl.style.pointerEvents = "auto";
+      aEl.href = url;
+      if (span) span.textContent = url;
+    } else {
+      aEl.style.opacity = "0.5";
+      aEl.style.pointerEvents = "none";
+      aEl.href = "#";
+      if (span) span.textContent = labelIfEmpty || "—";
+    }
+  }
+
+  function normalizeWeb(url) {
+    if (!url) return "";
+    let u = String(url).trim();
+    if (!u) return "";
+    if (!u.startsWith("http://") && !u.startsWith("https://")) u = "http://" + u;
+    return u;
+  }
+
+  function normalizeTel(phone) {
+    if (!phone) return "";
+    const p = String(phone).trim();
+    if (!p) return "";
+    // necháme plus a číslice, zbytek pryč
+    return p.replace(/[^\d+]/g, "");
+  }
+
+  // -------------------------
+  // Flags UI
+  // -------------------------
+  function renderFlagCheckboxes(flags) {
+    flagsBox.innerHTML = "";
+    flags.forEach(flag => {
+      const label = document.createElement("label");
+      label.className = "flag-item";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = flag;
+      cb.checked = requiredFlags.has(flag);
+
+      cb.addEventListener("change", () => {
+        if (cb.checked) requiredFlags.add(flag);
+        else requiredFlags.delete(flag);
+        loadData();
+      });
+
+      const span = document.createElement("span");
+      span.textContent = flag;
+
+      label.appendChild(cb);
+      label.appendChild(span);
+      flagsBox.appendChild(label);
+    });
+  }
+
+  function loadFlagsList() {
+    fetch("/api/flags")
+      .then(res => res.json())
+      .then(flags => renderFlagCheckboxes(flags))
+      .catch(err => console.error("flags fetch failed:", err));
+  }
+
+  // -------------------------
+  // Data loading
+  // -------------------------
+  function loadDatabases() {
+    fetch('/api/databases')
+      .then(res => res.json())
+      .then(dbs => {
+        dbSelect.innerHTML = '';
+        dbs.forEach(db => {
+          const opt = document.createElement('option');
+          opt.value = db;
+          opt.textContent = db;
+          dbSelect.appendChild(opt);
+        });
+        if (dbs.includes('companies_filtered.db')) dbSelect.value = 'companies_filtered.db';
+        loadData();
+      });
+  }
+
+  function loadData() {
+    currentDb = dbSelect.value;
+    currentMode = modeSelect.value;
+
+    let v = parseInt(minFlagsInput.value);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 50) v = 50;
+    minFlagsInput.value = v;
+    minFlags = v;
+
+    statusFilterMode = statusFilterModeSel.value;
+    statusFilterText = (statusFilterTextInp.value || "").trim();
+
+    const flagsParam = getFlagsParam();
+
+    urlDisplay.textContent = "Načítání...";
+    popisDisplay.textContent = "popis: —";
+    badge.textContent = "web_verified: —";
+    setBadgeStyle("");
+
+    // reset header
+    companyNameEl.textContent = "—";
+    phoneEl.textContent = "—";
+    emailA.querySelector("span").textContent = "—";
+    webA.querySelector("span").textContent = "—";
+    igA.style.opacity = "0.5"; igA.style.pointerEvents = "none";
+    fbA.style.opacity = "0.5"; fbA.style.pointerEvents = "none";
+    statusEditInput.value = "";
+
+    const url =
+      `/api/companies?db=${encodeURIComponent(currentDb)}` +
+      `&mode=${encodeURIComponent(currentMode)}` +
+      `&min_flags=${minFlags}` +
+      `&flags=${encodeURIComponent(flagsParam)}` +
+      `&status_mode=${encodeURIComponent(statusFilterMode)}` +
+      `&status_query=${encodeURIComponent(statusFilterText)}`;
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        companies = data.companies || [];
+        totalCountSpan.textContent = companies.length;
+        indexInput.max = companies.length;
+
+        if (companies.length > 0) {
+          loadCompany(0);
+        } else {
+          frame.src = 'about:blank';
+          urlDisplay.textContent = "Žádné záznamy.";
+          indexInput.value = 0;
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        urlDisplay.textContent = "Chyba načtení dat.";
+      });
+  }
+
+  function loadCompany(index) {
+    if (index < 0 || index >= companies.length) return;
+
+    currentIndex = index;
+    indexInput.value = index + 1;
+
+    const c = companies[index];
+    const url = normalizeWeb(c.web || "");
+
+    // Sales header
+    companyNameEl.textContent = safeText(c.name);
+    const phone = safeText(c.phone);
+    phoneEl.textContent = phone;
+
+    // copy phone
+    copyPhoneBtn.disabled = (phone === "—");
+    // tel link (na mobilu bude fungovat; na PC aspoň zkopíruješ)
+    const tel = normalizeTel(c.phone);
+    if (tel) {
+      phoneEl.style.cursor = "pointer";
+      phoneEl.title = "Klikni pro tel:";
+      phoneEl.onclick = () => { window.location.href = "tel:" + tel; };
+    } else {
+      phoneEl.style.cursor = "default";
+      phoneEl.onclick = null;
+    }
+
+    const email = (c.email || "").trim();
+    if (email) {
+      emailA.style.opacity = "1";
+      emailA.style.pointerEvents = "auto";
+      emailA.href = "mailto:" + email;
+      emailA.querySelector("span").textContent = email;
+    } else {
+      emailA.style.opacity = "0.5";
+      emailA.style.pointerEvents = "none";
+      emailA.href = "#";
+      emailA.querySelector("span").textContent = "—";
+    }
+
+    setLinkOrDisable(webA, url, "—");
+
+    // IG/FB
+    const ig = (c.instagram || "").trim();
+    if (ig) { igA.style.opacity="1"; igA.style.pointerEvents="auto"; igA.href = normalizeWeb(ig); igA.querySelector("span").textContent="instagram"; }
+    else { igA.style.opacity="0.5"; igA.style.pointerEvents="none"; igA.href="#"; igA.querySelector("span").textContent="instagram"; }
+
+    const fb = (c.facebook || "").trim();
+    if (fb) { fbA.style.opacity="1"; fbA.style.pointerEvents="auto"; fbA.href = normalizeWeb(fb); fbA.querySelector("span").textContent="facebook"; }
+    else { fbA.style.opacity="0.5"; fbA.style.pointerEvents="none"; fbA.href="#"; fbA.querySelector("span").textContent="facebook"; }
+
+    // row 1 displays
+    urlDisplay.textContent = `${safeText(c.name)} (${url || 'bez webu'})`;
+    externalLink.href = url || "#";
+
+    const wv = c.web_verified || "—";
+    badge.textContent = `web_verified: ${wv}`;
+    setBadgeStyle(wv);
+
+    popisDisplay.textContent = `popis: ${safeText(c.popis)}`;
+
+    // status editor prefill
+    statusEditInput.value = (c.status || "").trim();
+
+    loading.style.display = 'block';
+    frame.src = url || "about:blank";
+    frame.onload = () => { loading.style.display = 'none'; };
+  }
+
+  // Copy phone
+  copyPhoneBtn.addEventListener("click", async () => {
+    const c = currentCompany();
+    if (!c) return;
+    const phone = (c.phone || "").trim();
+    if (!phone) return;
+    try {
+      await navigator.clipboard.writeText(phone);
+      showSaveMsg(true, "Telefon zkopírován");
+    } catch {
+      showSaveMsg(false, "Nešlo zkopírovat");
+    }
+  });
+
+  function goNext() { if (currentIndex < companies.length - 1) loadCompany(currentIndex + 1); }
+  function goPrev() { if (currentIndex > 0) loadCompany(currentIndex - 1); }
+
+  // -------------------------
+  // Status save
+  // -------------------------
+  function saveStatus() {
+    const c = currentCompany();
+    if (!c) return;
+
+    const newStatus = (statusEditInput.value || "").trim();
+
+    fetch(`/api/companies/${c.id}/status?db=${encodeURIComponent(currentDb)}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({status: newStatus})
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        c.status = newStatus;
+        showSaveMsg(true, "Uloženo");
+      } else {
+        showSaveMsg(false, "Chyba: " + (data.error || "neznámá"));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      showSaveMsg(false, "Chyba komunikace");
+    });
+  }
+
+  statusSaveBtn.addEventListener("click", saveStatus);
+  statusEditInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); saveStatus(); }
+  });
+
+  // -------------------------
+  // Export
+  // -------------------------
+  function exportFilteredDb() {
+    currentDb = dbSelect.value;
+    currentMode = modeSelect.value;
+
+    let v = parseInt(minFlagsInput.value);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 50) v = 50;
+    minFlags = v;
+
+    statusFilterMode = statusFilterModeSel.value;
+    statusFilterText = (statusFilterTextInp.value || "").trim();
+    const flagsParam = getFlagsParam();
+
+    const url =
+      `/api/export?db=${encodeURIComponent(currentDb)}` +
+      `&mode=${encodeURIComponent(currentMode)}` +
+      `&min_flags=${minFlags}` +
+      `&flags=${encodeURIComponent(flagsParam)}` +
+      `&status_mode=${encodeURIComponent(statusFilterMode)}` +
+      `&status_query=${encodeURIComponent(statusFilterText)}`;
+
+    exportBtn.disabled = true;
+    exportBtn.textContent = "Exportuji...";
+
+    fetch(url, { method: "POST" })
+      .then(res => res.json())
+      .then(data => {
+        exportBtn.disabled = false;
+        exportBtn.textContent = "Export_filtered_database";
+
+        if (data.success) {
+          alert(`Export hotový!\nSoubor: ${data.export_db}\nŘádků: ${data.count}`);
+        } else {
+          alert("Export chyba: " + (data.error || "neznámá"));
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        exportBtn.disabled = false;
+        exportBtn.textContent = "Export_filtered_database";
+        alert("Chyba komunikace při exportu.");
+      });
+  }
+
+  exportBtn.addEventListener("click", exportFilteredDb);
+
+  // -------------------------
+  // Status filter UI
+  // -------------------------
+  statusFilterModeSel.addEventListener("change", () => {
+    const m = statusFilterModeSel.value;
+    if (m === "contains") {
+      statusFilterTextInp.style.display = "inline-block";
+      statusFilterTextInp.focus();
+    } else {
+      statusFilterTextInp.style.display = "none";
+      statusFilterTextInp.value = "";
+    }
+    loadData();
+  });
+
+  statusFilterTextInp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); loadData(); }
+  });
+
+  // -------------------------
+  // Basic controls
+  // -------------------------
+  document.getElementById('next-btn').onclick = goNext;
+  document.getElementById('prev-btn').onclick = goPrev;
+
+  indexInput.addEventListener('change', () => {
+    let val = parseInt(indexInput.value);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > companies.length) val = companies.length;
+    loadCompany(val - 1);
+  });
+
+  dbSelect.addEventListener('change', loadData);
+  modeSelect.addEventListener('change', loadData);
+  minFlagsInput.addEventListener('change', loadData);
+  document.getElementById('refresh-btn').addEventListener('click', loadData);
+
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement === indexInput || document.activeElement === minFlagsInput || document.activeElement === statusEditInput || document.activeElement === statusFilterTextInp) return;
+    if (e.key === 'ArrowRight') goNext();
+    else if (e.key === 'ArrowLeft') goPrev();
+  });
+
+  // -------------------------
+  // Splitter resize
+  // -------------------------
+  const controls = document.getElementById("controls");
+  const splitter = document.getElementById("splitter");
+  let dragging = false;
+
+  splitter.addEventListener("mousedown", () => {
+    dragging = true;
+    document.body.style.userSelect = "none";
+  });
+  window.addEventListener("mouseup", () => {
+    dragging = false;
+    document.body.style.userSelect = "auto";
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const top = controls.getBoundingClientRect().top;
+    const newH = Math.max(150, Math.min(window.innerHeight * 0.75, e.clientY - top));
+    controls.style.height = newH + "px";
+  });
+
+  // init
+  loadFlagsList();
+  loadDatabases();
+</script>
+
+</body>
+</html>

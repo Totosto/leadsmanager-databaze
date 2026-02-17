@@ -16,6 +16,7 @@ Tabulka: companies
   - facebook (TEXT) 
   - funguje (TEXT) [1 = funguje, 0 = nefunguje, python_gui = check in python]  #python gui jsou weby u kterých je definovaná nekompatibilita s režimem i frame režimem v manuálním filteru. Dá se s nimi počítat jako s funkčními a na 95% jsou moderní
   - web_verified (TEXT) [unverified, kvalitní grafika, nekvalitní grafika, nefunguje, neodpovida-obor] 
+  - popis (TEXT)
   - status (TEXT) 
   - assigned_user (TEXT) 
   - user_notes (TEXT) 

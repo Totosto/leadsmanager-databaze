@@ -1,0 +1,63 @@
+1) Funguje/Nefunguje:
+	-OK:6858 | BAD:9150 | TOTAL:16008
+	-Mám obavy. Nefunkčních webů je cca 57% všech webů. Ty firmy možná už neexistují.
+
+2) Technická kvalita - nekvalitní weby dávám jako "nekvalitní grafika"
+	-Websites with at least 1 technical problem: 3505/6858
+	
+	-Popisy:
+
+NO_HTTPS
+-Web se po přesměrování nenachází na adrese začínající https://, ale běží jen přes http://.
+To znamená, že komunikace není šifrovaná, což je dnes považováno za zastaralé a nedůvěryhodné řešení.
+
+NO_VIEWPORT
+-Na stránce chybí <meta name="viewport">, který říká mobilům, jak stránku správně zobrazit.
+Typicky to znamená, že web není responzivní a na mobilu se zobrazuje špatně nebo zastarale.
+
+THIN_CONTENT
+-Po odebrání HTML tagů má homepage velmi málo textu (pod nastavený práh).
+To může znamenat prázdnou stránku, rozbitý web, jen obrázek bez obsahu nebo extrémně jednoduchý/stagnující web.
+
+SSL_ERROR
+-Při pokusu o HTTPS spojení došlo k chybě certifikátu (např. expirovaný, self-signed, špatně nastavený).
+Web sice může běžet, ale bezpečnostní konfigurace je chybná, což působí neprofesionálně a může odrazovat návštěvníky.
+
+REQUEST_FAIL
+-Nepodařilo se stáhnout obsah stránky (např. timeout, blokování botů, síťová chyba).
+Může jít o skutečně nefunkční web nebo o server, který blokuje automatizované přístupy.
+
+
+3) Znaky zastaralých stránek 
+	-Updated 3370/6858
+
+	Popisky:
+
+OLD_HTML_PATTERNS
+-Na stránce byly nalezeny zastaralé HTML prvky jako <font>, <center>, <marquee> nebo staré atributy typu bgcolor, align apod.
+Tyto prvky jsou typické pro velmi staré weby (2005–2012) a obvykle naznačují zastaralý layout i technologii.
+
+TABLE_LAYOUT_HEAVY(n)
+-Na homepage se nachází velké množství <table> elementů (n = počet nalezených tabulek).
+To často znamená, že web používá tabulkový layout místo moderního CSS rozvržení, což je znak starší nebo neprofesionální struktury.
+
+INLINE_STYLE_HEAVY(n)
+-Na stránce je vysoký počet inline stylů (style="...") přímo v HTML (n = počet výskytů).
+To naznačuje ručně upravovaný nebo zastaralý kód bez oddělené CSS struktury, což je běžné u starších webů.
+
+NO_META_DESCRIPTION
+-Na stránce chybí <meta name="description">.
+To znamená slabou SEO optimalizaci a často nízkou úroveň profesionální správy webu.
+
+TITLE_MISSING
+-Na stránce chybí <title> tag.
+To je vážný nedostatek z pohledu SEO i profesionality a často se vyskytuje u rozbitých nebo velmi starých webů.
+
+TITLE_WEAK(...)
+-Titulní název stránky je velmi obecný (např. „Home“, „Úvod“, „Index“ apod.) nebo příliš krátký.
+To obvykle znamená, že web nebyl profesionálně optimalizován a může působit zastarale či amatérsky.
+
+NON_HTML_HOMEPAGE
+-Homepage nevrací klasický HTML obsah (např. PDF, prázdnou odpověď nebo jiný typ souboru).
+To může znamenat nestandardní nebo problematickou strukturu webu, která není vhodná pro moderní prezentaci firmy.
+
